@@ -358,6 +358,7 @@ class SymbolRewritingAccuracy(Metric):
             if self.correct(grammar, prediction_correct_length):
                 self.seq_correct += 1
 
+
 class VerifyProduceAccuracy(Metric):
     """
     Batch average of SciL produce micortask task sequence accuracy.
@@ -392,8 +393,11 @@ class VerifyProduceAccuracy(Metric):
         self.output_eos_symbol = output_eos_symbol
         self.output_unk_symbol = output_unk_symbol
 
+        self.verify_targets = ['yes', 'no']
+
         self.seq_correct = 0
         self.seq_total = 0
+        self.s_acc = 0
 
         super(VerifyProduceAccuracy, self).__init__(self._NAME, self._SHORTNAME, self._INPUT)
 
@@ -414,6 +418,7 @@ class VerifyProduceAccuracy(Metric):
         """
         self.seq_correct = 0
         self.seq_total = 0
+        self.s_acc = SequenceAccuracy(ignore_index=self.output_vocab.stoi[self.output_pad_symbol])
 
     def correct(self, grammar, prediction):
         '''
@@ -431,10 +436,10 @@ class VerifyProduceAccuracy(Metric):
         not_in = lambda a,b: frozenset(a).isdisjoint(frozenset(b))
         if ('or' in grammar):
             target = list(set(grammar) - set(['produce', 'or']))
-            all_correct = any_in(prediction, target)
+            all_correct = any_in(target, prediction)
         elif('and' in grammar and 'not' not in grammar):
             target = list(set(grammar) - set(['produce', 'and']))
-            all_correct = all_in(prediction, target)
+            all_correct = all_in(target, prediction)
         elif('not' in grammar):
             grammar.pop(grammar.index('produce'))
             target = grammar.copy() #list(set(grammar) - set(['produce']))
@@ -442,11 +447,11 @@ class VerifyProduceAccuracy(Metric):
             for i in range(1, len(target)):
                 if(target[i-1]=='not'):
                     check1.append(target[i])
-            if(not_in(prediction, check1)):
+            if(not_in(check1, prediction)):
                 ops = ['and', 'not']
                 ops.extend(check1)
                 check2 = list(set(target) - set(ops))
-                all_correct = True if all_in(check2, prediction) else False
+                all_correct = all_in(check2, prediction)
             else:
                 all_correct = False
 
@@ -487,56 +492,73 @@ class VerifyProduceAccuracy(Metric):
 
             # Convert indices to strings
             # Remove all padding from the grammar.
+
             grammar = [self.input_vocab.itos[token] for token in grammar if
-                       self.input_vocab.itos[token] != self.input_pad_symbol]
+                       self.input_vocab.itos[token] != self.input_pad_symbol
+                       and self.input_vocab.itos[token] != self.output_eos_symbol]
+
             prediction = [self.output_vocab.itos[token] for token in prediction]
+
             tgt_output = [self.output_vocab.itos[token] for token in target_output if
                           self.output_vocab.itos[token] != self.output_pad_symbol ]
 
-            # print('grammar:')
-            # print(grammar)
-            # input()
-            # print('target outputs:')
-            # print(tgt_output)
-            # print('predictions:')
-            # print(prediction)
+            prediction_copy = prediction.copy()
+            target_copy = tgt_output.copy()
+            removals = [self.output_sos_symbol, self.output_pad_symbol, self.output_unk_symbol]
+
+            for r in removals:
+                if (r in target_copy):
+                    target_copy = [t for t in target_copy if t != r]
+                if (r in prediction_copy):
+                    prediction_copy = [p for p in prediction_copy if p != r]
+
+            target_copy = target_copy[:target_copy.index(self.output_eos_symbol)]
+            prediction_copy = prediction_copy[:prediction_copy.index(self.output_eos_symbol)]if self.output_eos_symbol \
+                                                                                                 in prediction_copy \
+                                                                                                 else prediction_copy
+
 
             # # The first prediction after the actual output should be EOS
-            if self.use_output_eos and prediction[-1] != self.output_eos_symbol:
+            if self.use_output_eos and self.output_eos_symbol not in prediction:
                 continue
 
             # Remove EOS (and possible padding)
-            prediction_correct_length = prediction[:-1]
+            prediction_correct_length = prediction[:prediction.index(self.output_eos_symbol)]  if self.use_output_eos \
+                                        else prediction
 
-            # If the EOS symbol is present in the prediction, this means that the prediction was too
-            # short.
-            # Since SOS, PAD and UNK are also part of the output dictionary, these can technically
-            # also be predicted by the model, especially at the beginning of training due to random
-            # weight initialization. Since these render the output incorrect and cause an error in
-            # correct(), we check for their presence here.
-            # if  self.output_eos_symbol in prediction_correct_length or \
-            #         self.output_sos_symbol in prediction_correct_length or \
-            #         self.output_pad_symbol in prediction_correct_length or \
-            #         self.output_unk_symbol in prediction_correct_length:
-            #     continue
-
-            # if the input is a verify task then just check the binary output and move to next
-            # input in the batch
-            # print(self.seq_correct)
-            # input()
             if ('verify' in grammar):
-                if tgt_output[-2] in prediction_correct_length:
+                if self.use_output_eos:
+                    act_target = tgt_output[-2]
+                else:
+                    act_target = tgt_output[-1]
+                inv_target = list(set(self.verify_targets) - set([act_target]))[0]
+
+                if act_target in prediction_correct_length and inv_target not in prediction_correct_length:
                     self.seq_correct += 1
+                elif(target_copy==prediction_copy):
+                    print(grammar)
+                    print(target_copy)
+                    print(prediction_correct_length)
                 continue
 
             # Check whether the prediction actually comes from the grammar
-            trimmed_prediction = list(set(prediction_correct_length)-set(['erm']))
-            # print('trimmed predictions:')
-            # print(prediction_correct_length)
-            # print(trimmed_prediction)
-            # input()
-            if self.correct(grammar, trimmed_prediction):
+            trimmed_prediction = [pcl for pcl in prediction_correct_length if pcl != 'erm']
+            grammar2 = grammar.copy()
+            if self.correct(grammar2, trimmed_prediction):
                 self.seq_correct += 1
+            elif (target_copy == prediction_copy):
+                print('grammar:{}'.format(grammar))
+                print('target:{}'.format(target_copy))
+                print('trimmed_pred:{}'.format(trimmed_prediction))
+
+
+        self.s_acc.eval_batch(outputs, targets)
+        if(self.s_acc.seq_match > self.seq_correct):
+            print("Microtask results:")
+            print(self.seq_correct)
+            print("Sequence acc results")
+            print(self.s_acc.seq_match)
+            #input()
 
 
 class PonderTokenMetric(Metric):
@@ -584,7 +606,7 @@ class PonderTokenMetric(Metric):
             float: average accuracy
         """
         if self.ponder_total != 0:
-            return float(self.ponder_correct) / self.ponder_total
+            return float(min(self.ponder_correct, self.ponder_total) / max(self.ponder_correct, self.ponder_total) )
         else:
             return 0
 
@@ -622,15 +644,15 @@ class PonderTokenMetric(Metric):
             # If all these test fail, we consider the sequence correct.
 
             # Extract the current example and move to cpu
-            grammar = input_variable[i_batch_element, :].data.cpu().numpy()
+            #grammar = input_variable[i_batch_element, :].data.cpu().numpy()
             prediction = predictions[i_batch_element, :].data.cpu().numpy()
             target_output = output_variable[i_batch_element, :].data.cpu().numpy()
 
 
             # Convert indices to strings
             # Remove all padding from the grammar.
-            grammar = [self.input_vocab.itos[token] for token in grammar if
-                       self.input_vocab.itos[token] != self.input_pad_symbol]
+            # grammar = [self.input_vocab.itos[token] for token in grammar if
+            #            self.input_vocab.itos[token] != self.input_pad_symbol]
             prediction = [self.output_vocab.itos[token] for token in prediction]
             target_output = [self.output_vocab.itos[token] for token in target_output if
                           self.output_vocab.itos[token] != self.output_pad_symbol ]
@@ -641,8 +663,8 @@ class PonderTokenMetric(Metric):
                 continue
 
             # Remove EOS (and possible padding)
-            ponder_length = prediction[:prediction.index(self.output_eos_symbol)]
-            tgt_length = target_output[1:-1]
+            ponder_length = prediction[:prediction.index(self.output_eos_symbol)] if self.use_output_eos else prediction
+            tgt_length = target_output[1:-1] if self.use_output_eos else target_output
 
             pc = [p for p in ponder_length if p==self.ponder_token]
             pt = [p for p in tgt_length if p==self.ponder_token]
