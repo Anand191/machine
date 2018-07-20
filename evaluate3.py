@@ -29,7 +29,7 @@ parser.add_argument('--cuda_device', default=0, type=int, help='set cuda device 
 parser.add_argument('--max_len', type=int, help='Maximum sequence length', default=50)
 parser.add_argument('--batch_size', type=int, help='Batch size', default=32)
 parser.add_argument('--log-level', default='info', help='Logging level.')
-
+parser.add_argument('--teacher_forcing_ratio', type=float, help='Teacher forcing ratio', default=0.2)
 parser.add_argument('--attention', choices=['pre-rnn', 'post-rnn'], default=False)
 parser.add_argument('--attention_method', choices=['dot', 'mlp', 'hard'], default=None)
 parser.add_argument('--use_attention_loss', action='store_true')
@@ -71,6 +71,7 @@ output_vocab = checkpoint.output_vocab
 
 ############################################################################
 # Prepare dataset and loss
+
 src = SourceField()
 tgt = TargetField(output_eos_used)
 
@@ -90,22 +91,25 @@ def len_filter(example):
     return len(example.src) <= max_len and len(example.tgt) <= max_len
 
 # generate test set
-test = torchtext.data.TabularDataset(
-    path=opt.test_data, format='tsv',
-    fields=tabular_data_fields,
-    filter_pred=len_filter
-)
+def prep_data(fpath):
+    test = torchtext.data.TabularDataset(
+        path=fpath, format='tsv',
+        fields=tabular_data_fields,
+        filter_pred=len_filter
+    )
 
-# When chosen to use attentive guidance, check whether the data is correct for the first
-# example in the data set. We can assume that the other examples are then also correct.
-if opt.use_attention_loss or opt.attention_method == 'hard':
-    if len(test) > 0:
-        if 'attn' not in vars(test[0]):
-            raise Exception("AttentionField not found in test data")
-        tgt_len = len(vars(test[0])['tgt']) - 1 # -1 for SOS
-        attn_len = len(vars(test[0])['attn']) - 1 # -1 for preprended ignore_index
-        if attn_len != tgt_len:
-            raise Exception("Length of output sequence does not equal length of attention sequence in test data.")
+    # When chosen to use attentive guidance, check whether the data is correct for the first
+    # example in the data set. We can assume that the other examples are then also correct.
+    if opt.use_attention_loss or opt.attention_method == 'hard':
+        if len(test) > 0:
+            if 'attn' not in vars(test[0]):
+                raise Exception("AttentionField not found in test data")
+            tgt_len = len(vars(test[0])['tgt']) - 1 # -1 for SOS
+            attn_len = len(vars(test[0])['attn']) - 1 # -1 for preprended ignore_index
+            if attn_len != tgt_len:
+                raise Exception("Length of output sequence does not equal length of attention sequence in test data.")
+
+    return test
 
 # Prepare loss and metrics
 pad = output_vocab.stoi[tgt.pad_token]
@@ -162,9 +166,38 @@ data_func = SupervisedTrainer.get_batch_data
 # Evaluate model on test set
 
 evaluator = Evaluator(batch_size=opt.batch_size, loss=losses, metrics=metrics)
-losses, metrics = evaluator.evaluate(model=seq2seq, data=test, get_batch_data=data_func)
 
+#************evaluate on different splits*****************************************
+import numpy as np
+import pandas as pd
 
-total_loss, log_msg, _ = SupervisedTrainer.get_losses(losses, metrics, 0)
+out_path = './New_AG'
+columns = ['train_regime', 'filename', 'seq_acc', 'vp_tsk_acc', 'erm_tkn_acc']
+data_split = ['verify', 'produce']
+fnames = ['unseen', 'longer', 'unseen_longer']
+training_type = '_'.join(map(str,opt.checkpoint_path.split('/')[-3].split('_')[0:2]))
+for d in data_split:
+    if (d=='verify'):
+        ops = ['and', 'or', 'not', 'copy']
+    else:
+        ops = ['and', 'or', 'not']
+    data_arr = np.zeros((len(ops)*len(fnames), 5), dtype=object)
+    count = 0
+    for f in fnames:
+        for o in ops:
+            path = os.path.join(opt.test_data, d, '{}_{}_{}.tsv'.format(d,f,o))
+            test = prep_data(path)
+            data_arr[count,0] = training_type
+            data_arr[count,1] = '{}_{}_{}'.format(d,f,o)
+            losses, metrics = evaluator.evaluate(model=seq2seq, data=test, get_batch_data=data_func)
+            #metric_names = ['seq_acc', 'vp_tsk_acc', 'erm_tkn_acc']
+            metric_values = [metric.get_val() for metric in metrics]
+            data_arr[count,2:] = metric_values
+            count += 1
 
-logging.info(log_msg)
+            total_loss, log_msg, _ = SupervisedTrainer.get_losses(losses, metrics, 0)
+            logging.info(log_msg)
+    df = pd.DataFrame(data_arr, columns=columns)
+    df.to_csv(os.path.join(out_path, '{}_{}.tsv'.format(training_type, d)), sep='\t')
+
+#***********************************************************************************
