@@ -1,7 +1,7 @@
 #! /bin/sh
 
 TEST_PATH=../machine-tasks/CommaiMini-^$/New_AG
-EXPT_DIR=./New_AG/gru_learned_ng_longer_E128_H128/
+EXPT_DIR=./New_AG/gru_baseline_ng_longer_E128_H128/
 ATTN='pre-rnn'
 ATTN_METHOD='mlp'
 TF=1
@@ -12,5 +12,6 @@ python evaluate3.py \
         --test_data $TEST_PATH \
         --attention $ATTN \
         --attention_method $ATTN_METHOD \
-        --use_attention_loss \
         --teacher_forcing $TF
+        #--use_attention_loss \
+        #--full_focus \

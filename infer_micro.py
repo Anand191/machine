@@ -170,7 +170,7 @@ def showAttention(input_sentence, output_words, attentions,name,colour):
     ax.yaxis.set_label_position('right')
     ax.xaxis.set_label_position('top')
 
-    plt.savefig("{}.png".format(name))
+    plt.savefig("{}-eps.eps".format(name), format='eps')
     plt.close(fig)
     # plt.show()
     # input()
@@ -183,7 +183,11 @@ def plot_attention(idxs, test_data,opt_path):
         seq = ipt_sentence.strip().split()
         tgt_seq = opt_sentence.strip().split()
         ipt_seq = ipt_sentence.strip().split()
-        outputs, attention = predictor.predict(seq)
+        if opt.attention_method == 'hard':
+            tgt_var = list(map(int, test_data[x, 2]))
+            outputs, attention = predictor.predict(seq, tgt_seq,tgt_var)
+        else:
+            outputs, attention = predictor.predict(seq)
         trimmed_prediction = [pcl for pcl in outputs if pcl != 'erm']
         colour = get_colour(ipt_seq, tgt_seq, trimmed_prediction, outputs)
         name = os.path.join(opt_path, 'plot' + '{}'.format(x))
