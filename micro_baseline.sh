@@ -1,7 +1,7 @@
 #! /bin/sh
 
-TEST_PATH=../machine-tasks/CommaiMini-^$/Ponderless/Long
-EXPT_DIR=./Ponderless/gru_baseline_np_longer_E128_H128/
+TEST_PATH=../machine-tasks/CommaiMini-^$/New_Guidance/Sample1/Long
+EXPT_DIR=./MicroTask_Runs/lstm_baseline_sample1_E128_H128/
 OUT_DIR=attention_plots/micro
 ATTN='pre-rnn'
 ATTN_METHOD='mlp'

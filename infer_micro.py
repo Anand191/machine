@@ -150,15 +150,15 @@ def showAttention(input_sentence, output_words, attentions,name,colour):
     cbaxes.yaxis.set_ticks_position('left')
 
     # Set up axes
-    ax.set_xticks(np.arange(len(input_sentence.split())+1))
-    ax.set_yticks(np.arange(len(output_words)+1))
-    ax.set_xticklabels([''] + input_sentence.split(' '), rotation=45) #+['<EOS>']
-    ax.set_yticklabels([''] + output_words)
+    # ax.set_xticks(np.arange(len(input_sentence.split())+1))
+    # ax.set_yticks(np.arange(len(output_words)+1))
+    ax.set_xticklabels([''] + input_sentence.split(' '), rotation=45, fontsize='xx-large') #+['<EOS>']
+    ax.set_yticklabels([''] + output_words, fontsize='xx-large')
     # print(ax.get_yticklabels())
     # input()
     #Colour ticks
-    for ytick, color in zip(ax.get_yticklabels()[1:], colour):
-        ytick.set_color(color)
+    # for ytick, color in zip(ax.get_yticklabels()[1:], colour):
+    #     ytick.set_color(color)
 
     # Show label at every tick
     ax.xaxis.set_major_locator(ticker.MultipleLocator(1))
@@ -170,7 +170,7 @@ def showAttention(input_sentence, output_words, attentions,name,colour):
     ax.yaxis.set_label_position('right')
     ax.xaxis.set_label_position('top')
 
-    plt.savefig("{}-eps.eps".format(name), format='eps')
+    plt.savefig("{}-eps.png".format(name))
     plt.close(fig)
     # plt.show()
     # input()

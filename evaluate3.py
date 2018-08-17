@@ -172,33 +172,38 @@ evaluator = Evaluator(batch_size=opt.batch_size, loss=losses, metrics=metrics)
 import numpy as np
 import pandas as pd
 
-out_path = './New_AG'
-columns = ['train_regime', 'filename', 'seq_acc', 'vp_tsk_acc', 'erm_tkn_acc']
+out_path = './MicroTask_Runs'
+columns = ['data_split', 'filename', 'seq_acc', 'vp_tsk_acc', 'erm_tkn_acc']
 data_split = ['verify', 'produce']
 fnames = ['unseen', 'longer', 'unseen_longer']
-training_type = '_'.join(map(str,opt.checkpoint_path.split('/')[-3].split('_')[0:2]))
+training_type = '_'.join(map(str,opt.checkpoint_path.split('/')[-3].split('_')[0:3]))
 for d in data_split:
-    if (d=='verify'):
-        ops = ['and', 'or', 'not', 'copy']
-    else:
-        ops = ['and', 'or', 'not']
-    data_arr = np.zeros((len(ops)*len(fnames), 5), dtype=object)
-    count = 0
-    for f in fnames:
-        for o in ops:
-            path = os.path.join(opt.test_data, d, '{}_{}_{}.tsv'.format(d,f,o))
-            test = prep_data(path)
-            data_arr[count,0] = training_type
-            data_arr[count,1] = '{}_{}_{}'.format(d,f,o)
-            losses, metrics = evaluator.evaluate(model=seq2seq, data=test, get_batch_data=data_func)
-            #metric_names = ['seq_acc', 'vp_tsk_acc', 'erm_tkn_acc']
-            metric_values = [metric.get_val() for metric in metrics]
-            data_arr[count,2:] = metric_values
-            count += 1
+    frames = []
+    for i in range(1, 6):
+        if (d=='verify'):
+            ops = ['and', 'or', 'not', 'copy']
+        else:
+            ops = ['and', 'or', 'not']
+        data_arr = np.zeros((len(ops)*len(fnames), 5), dtype=object)
+        count = 0
+        for f in fnames:
+            for o in ops:
+                path = os.path.join(opt.test_data, 'Sample{}'.format(i), d, '{}_{}_{}.tsv'.format(d,f,o))
+                test = prep_data(path)
+                data_arr[count,0] = training_type
+                data_arr[count,1] = '{}_{}_{}'.format(d,f,o)
+                losses, metrics = evaluator.evaluate(model=seq2seq, data=test, get_batch_data=data_func)
+                #metric_names = ['seq_acc', 'vp_tsk_acc', 'erm_tkn_acc']
+                metric_values = [metric.get_val() for metric in metrics]
+                data_arr[count,2:] = metric_values
+                count += 1
 
-            total_loss, log_msg, _ = SupervisedTrainer.get_losses(losses, metrics, 0)
-            logging.info(log_msg)
-    df = pd.DataFrame(data_arr, columns=columns)
-    df.to_csv(os.path.join(out_path, '{}_{}.tsv'.format(training_type, d)), sep='\t')
+                total_loss, log_msg, _ = SupervisedTrainer.get_losses(losses, metrics, 0)
+                logging.info(log_msg)
+        df = pd.DataFrame(data_arr, columns=columns)
+        frames.append(df)
+    result = pd.concat(frames)
+    result.to_csv(os.path.join(out_path, 'Hard','{}_{}.tsv'.format(training_type, d)), sep='\t')
+        #df.to_csv(os.path.join(out_path, '{}_{}.tsv'.format(training_type, d)), sep='\t')
 
 #***********************************************************************************

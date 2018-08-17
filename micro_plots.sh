@@ -1,8 +1,8 @@
 #! /bin/sh
 
-TEST_PATH=../machine-tasks/CommaiMini-^$/New_AG/Long
-EXPT_DIR=./New_AG/gru_hard_ng_longer_E128_H128/
-OUT_DIR=attention_plots/micro
+TEST_PATH=../machine-tasks/CommaiMini-^$/New_Guidance/Sample1/Long
+EXPT_DIR=./MicroTask_Runs/lstm_hard_sample1_E128_H128/
+OUT_DIR=attention_plots/micro_new
 ATTN='pre-rnn'
 ATTN_METHOD='hard'
 TF=1

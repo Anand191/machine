@@ -1,9 +1,9 @@
 #! /bin/sh
 
-TEST_PATH=../machine-tasks/CommaiMini-^$/New_AG
-EXPT_DIR=./New_AG/gru_baseline_ng_longer_E128_H128/
+TEST_PATH=../machine-tasks/CommaiMini-^$/New_Guidance
+EXPT_DIR=./MicroTask_Runs/lstm_hard_sample5_E128_H128/
 ATTN='pre-rnn'
-ATTN_METHOD='mlp'
+ATTN_METHOD='hard'
 TF=1
 
 echo "Run in evaluation mode"
@@ -13,5 +13,4 @@ python evaluate3.py \
         --attention $ATTN \
         --attention_method $ATTN_METHOD \
         --teacher_forcing $TF
-        #--use_attention_loss \
-        #--full_focus \
+        #--use_attention_loss
